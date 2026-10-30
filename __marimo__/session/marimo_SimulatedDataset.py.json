@@ -1,0 +1,812 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.25.1",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "025a09f32ea532f192f61ab314f6c27f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">(Transaction_data_Simulator)=</span>\n<h1 id=\"transaction-data-simulator\">Transaction data simulator</h1>\n<span class=\"paragraph\">This section presents a transaction data simulator of legitimate and fraudulent transactions. This simulator will be used throughout the rest of this book to motivate and assess the efficiency of different fraud detection techniques in a reproducible way.</span>\n<span class=\"paragraph\">A simulation is necessarily an approximation of reality. Compared to the complexity of the dynamics underlying real-world payment card transaction data, the data simulator that we present below follows a simple design.</span>\n<span class=\"paragraph\">This simple design is a choice. First, having simple rules to generate transactions and fraudulent behaviors will help in interpreting the kind of patterns that different fraud detection techniques can identify. Second, while simple in its design, the data simulator will generate datasets that are challenging to deal with.</span>\n<span class=\"paragraph\">The simulated datasets will highlight most of the issues that practitioners of fraud detection face using real-world data. In particular, they will include class imbalance (less than 1% of fraudulent transactions), a mix of numerical and categorical features (with categorical features involving a very large number of values), non-trivial relationships between features, and time-dependent fraud scenarios.</span>\n<h3>Design choices</h3>\n\n<h4>Transaction features</h4>\n\n<span class=\"paragraph\">Our focus will be on the most essential features of a transaction. In essence, a payment card transaction consists of any amount paid to a merchant by a customer at a certain time. The six main features that summarise a transaction therefore are:</span>\n<ol>\n<li>The transaction ID: A unique identifier for the transaction</li>\n<li>The date and time: Date and time at which the transaction occurs</li>\n<li>The customer ID: The identifier for the customer. Each customer has a unique identifier</li>\n<li>The terminal ID: The identifier for the merchant (or more precisely the terminal). Each terminal has a unique identifier</li>\n<li>The transaction amount: The amount of the transaction.</li>\n<li>The fraud label: A binary variable, with the value <marimo-tex class=\"arithmatex\">||(0||)</marimo-tex> for a legitimate transaction, or the value <marimo-tex class=\"arithmatex\">||(1||)</marimo-tex> for a fraudulent transaction.</li>\n</ol>\n<span class=\"paragraph\">These features will be referred to as <code>TRANSACTION_ID</code>, <code>TX_DATETIME</code>, <code>CUSTOMER_ID</code>, <code>TERMINAL_ID</code>, <code>TX_AMOUNT</code>, and <code>TX_FRAUD</code>.</span>\n<span class=\"paragraph\">The goal of the transaction data simulator will be to generate a table of transactions with these features. This table will be referred to as the <em>labeled transactions</em> table. Such a table is illustrated in Fig. 1.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "feaf37bece891d900a253b96f2909b85",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><img alt=\"alt text\" src=\"images/tx_table.png\" /></span>\n<p style=\"text-align: center;\">\nFig. 1. Example of labeled transaction table. Each transaction is represented as a row in the table,<br> together with its label (TX_FRAUD variable, 0 for legitimate, and 1 for fraudulent transactions).\n</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "9330536326614528e828ba82799f700d",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "No module named 'matplotlib'",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_35216\\__marimo__cell_bkHC_.py\"</span>, line <span class=\"m\">15</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"kn\">import</span><span class=\"w\"> </span><span class=\"nn\">matplotlib.pyplot</span><span class=\"w\"> </span><span class=\"k\">as</span><span class=\"w\"> </span><span class=\"nn\">plt</span>\n<span class=\"gr\">ModuleNotFoundError</span>: <span class=\"n\">No module named 'matplotlib'</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "6f70da0f235bfca798357733e0c69a26",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"customer-profiles-generation\">Customer profiles generation</h2>\n<span class=\"paragraph\">Each customer will be defined by the following properties:</span>\n<ul>\n<li><code>CUSTOMER_ID</code>: The customer unique ID</li>\n<li>(<code>x_customer_id</code>,<code>y_customer_id</code>): A pair of real coordinates (<code>x_customer_id</code>,<code>y_customer_id</code>) in a 100 * 100 grid, that defines the geographical location of the customer</li>\n<li>(<code>mean_amount</code>, <code>std_amount</code>):  The mean and standard deviation of the transaction amounts for the customer, assuming that the transaction amounts follow a normal distribution. The <code>mean_amount</code> will be drawn from a uniform distribution (5,100) and the <code>std_amount</code> will be set as the <code>mean_amount</code> divided by two.</li>\n<li><code>mean_nb_tx_per_day</code>:  The average number of transactions per day for the customer, assuming that the number of transactions per day follows a Poisson distribution. This number will be drawn from a uniform distribution (0,4).</li>\n</ul>\n<span class=\"paragraph\">The <code>generate_customer_profiles_table</code> function provides an implementation for generating a table of customer profiles. It takes as input the number of customers for which to generate a profile and a random state for reproducibility. It returns a DataFrame containing the properties for each customer.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "79d60f945d006673117399ed4d142358",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h4>Transaction generation process</h4>\n\n<span class=\"paragraph\">The simulation will consist of five main steps:</span>\n<ol>\n<li>Generation of customer profiles: Every customer is different in their spending habits. This will be simulated by defining some properties for each customer. The main properties will be their geographical location, their spending frequency, and their spending amounts. The customer properties will be represented as a table, referred to as the <em>customer profile table</em>.</li>\n<li>Generation of terminal profiles: Terminal properties will simply consist of a geographical location. The terminal properties will be represented as a table, referred to as the <em>terminal profile table</em>.</li>\n<li>Association of customer profiles to terminals: We will assume that customers only make transactions on terminals that are within a radius of <marimo-tex class=\"arithmatex\">||(r||)</marimo-tex> of their geographical locations. This makes the simple assumption that a customer only makes transactions on terminals that are geographically close to their location. This step will consist of adding a feature 'list_terminals' to each customer profile, that contains the set of terminals that a customer can use.</li>\n<li>Generation of transactions: The simulator will loop over the set of customer profiles, and generate transactions according to their properties (spending frequencies and amounts, and available terminals). This will result in a table of transactions.</li>\n<li>Generation of fraud scenarios: This last step will label the transactions as legitimate or genuine. This will be done by following three different fraud scenarios.</li>\n</ol>\n<span class=\"paragraph\">The transaction generation process is illustrated below.</span>\n<span class=\"paragraph\"><img alt=\"alt text\" src=\"images/FlowDatasetGenerator.png\" /></span>\n<p style=\"text-align: center;\">\nFig. 2. Transaction generation process. The customer and terminal profiles are used to generate  <br> a set of transactions. The final step, which generates fraud scenarios, provides the labeled transactions table.\n\n\nThe following sections detail the implementation for each of these steps.</span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "21c012634a89c3f29fa186630eb011a2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "a4312f3901a7be02ac6abab2ab2fb278",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">As an example, let us generate a customer profile table for five customers:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "78f675aa897e59c9fca4fb61f80e67d1",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='BYtC-0' random-id='9849a6e1-5476-90c0-4a99-fb0ffcbdc0b0'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;x_customer_id&#92;&quot;:54.88135039273247,&#92;&quot;y_customer_id&#92;&quot;:71.51893663724195,&#92;&quot;mean_amount&#92;&quot;:62.262520726806166,&#92;&quot;std_amount&#92;&quot;:31.131260363403083,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.1795327319875875},{&#92;&quot;CUSTOMER_ID&#92;&quot;:1,&#92;&quot;x_customer_id&#92;&quot;:42.36547993389047,&#92;&quot;y_customer_id&#92;&quot;:64.58941130666561,&#92;&quot;mean_amount&#92;&quot;:46.57078506995579,&#92;&quot;std_amount&#92;&quot;:23.285392534977895,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.567092003128319},{&#92;&quot;CUSTOMER_ID&#92;&quot;:2,&#92;&quot;x_customer_id&#92;&quot;:96.36627605010293,&#92;&quot;y_customer_id&#92;&quot;:38.34415188257777,&#92;&quot;mean_amount&#92;&quot;:80.21387861785314,&#92;&quot;std_amount&#92;&quot;:40.10693930892657,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.115579679011618},{&#92;&quot;CUSTOMER_ID&#92;&quot;:3,&#92;&quot;x_customer_id&#92;&quot;:56.80445610939323,&#92;&quot;y_customer_id&#92;&quot;:92.5596638292661,&#92;&quot;mean_amount&#92;&quot;:11.74842552879926,&#92;&quot;std_amount&#92;&quot;:5.87421276439963,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:0.34851719880616283},{&#92;&quot;CUSTOMER_ID&#92;&quot;:4,&#92;&quot;x_customer_id&#92;&quot;:2.021839744032572,&#92;&quot;y_customer_id&#92;&quot;:83.2619845547938,&#92;&quot;mean_amount&#92;&quot;:78.9248913402358,&#92;&quot;std_amount&#92;&quot;:39.4624456701179,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.4800485929872766},{&#92;&quot;CUSTOMER_ID&#92;&quot;:5,&#92;&quot;x_customer_id&#92;&quot;:97.8618342232764,&#92;&quot;y_customer_id&#92;&quot;:79.91585642167236,&#92;&quot;mean_amount&#92;&quot;:48.84053941402853,&#92;&quot;std_amount&#92;&quot;:24.420269707014263,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.122116705145822},{&#92;&quot;CUSTOMER_ID&#92;&quot;:6,&#92;&quot;x_customer_id&#92;&quot;:11.827442586893323,&#92;&quot;y_customer_id&#92;&quot;:63.99210213275238,&#92;&quot;mean_amount&#92;&quot;:18.618562303859406,&#92;&quot;std_amount&#92;&quot;:9.309281151929703,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.7786756681983356},{&#92;&quot;CUSTOMER_ID&#92;&quot;:7,&#92;&quot;x_customer_id&#92;&quot;:52.184832175007166,&#92;&quot;y_customer_id&#92;&quot;:41.46619399905236,&#92;&quot;mean_amount&#92;&quot;:30.132783149939563,&#92;&quot;std_amount&#92;&quot;:15.066391574969781,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.0969347577368667},{&#92;&quot;CUSTOMER_ID&#92;&quot;:8,&#92;&quot;x_customer_id&#92;&quot;:45.615033221654855,&#92;&quot;y_customer_id&#92;&quot;:56.84339488686485,&#92;&quot;mean_amount&#92;&quot;:6.785031041453738,&#92;&quot;std_amount&#92;&quot;:3.392515520726869,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.4705419883035082},{&#92;&quot;CUSTOMER_ID&#92;&quot;:9,&#92;&quot;x_customer_id&#92;&quot;:61.20957227224214,&#92;&quot;y_customer_id&#92;&quot;:61.69339968747569,&#92;&quot;mean_amount&#92;&quot;:94.6560674588893,&#92;&quot;std_amount&#92;&quot;:47.32803372944465,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.7272811964139336}]&quot;' data-total-rows='10000' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;CUSTOMER_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;x_customer_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;y_customer_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;mean_amount&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;std_amount&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;mean_nb_tx_per_day&quot;,[&quot;number&quot;,&quot;float64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "6a8bdf93e54541277aea6c37a50a859e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"terminal-profiles-generation\">Terminal profiles generation</h2>\n<span class=\"paragraph\">Each terminal will be defined by the following properties:</span>\n<ul>\n<li><code>TERMINAL_ID</code>: The terminal ID</li>\n<li>(<code>x_terminal_id</code>,<code>y_terminal_id</code>): A pair of real coordinates (<code>x_terminal_id</code>,<code>y_terminal_id</code>) in a 100 * 100 grid, that defines the geographical location of the terminal</li>\n</ul>\n<span class=\"paragraph\">The <code>generate_terminal_profiles_table</code> function provides an implementation for generating a table of terminal profiles. It takes as input the number of terminals for which to generate a profile and a random state for reproducibility. It returns a DataFrame containing the properties for each terminal.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "6a64bcd03d452ebc007ca1126b94e585",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "da096a015c7ebfb7d38c2203e7077c3b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">As an example, let us generate a customer terminal table for five terminals:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "cd8f5cf4710068bcbf9bcbdc0fbd61a8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='6b1925b6-6c01-5482-25ff-8c9009b2f380'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;TERMINAL_ID&#92;&quot;:0,&#92;&quot;x_terminal_id&#92;&quot;:54.88135039273247,&#92;&quot;y_terminal_id&#92;&quot;:71.51893663724195},{&#92;&quot;TERMINAL_ID&#92;&quot;:1,&#92;&quot;x_terminal_id&#92;&quot;:60.276337607164386,&#92;&quot;y_terminal_id&#92;&quot;:54.48831829968969},{&#92;&quot;TERMINAL_ID&#92;&quot;:2,&#92;&quot;x_terminal_id&#92;&quot;:42.36547993389047,&#92;&quot;y_terminal_id&#92;&quot;:64.58941130666561},{&#92;&quot;TERMINAL_ID&#92;&quot;:3,&#92;&quot;x_terminal_id&#92;&quot;:43.75872112626925,&#92;&quot;y_terminal_id&#92;&quot;:89.17730007820798},{&#92;&quot;TERMINAL_ID&#92;&quot;:4,&#92;&quot;x_terminal_id&#92;&quot;:96.36627605010293,&#92;&quot;y_terminal_id&#92;&quot;:38.34415188257777},{&#92;&quot;TERMINAL_ID&#92;&quot;:5,&#92;&quot;x_terminal_id&#92;&quot;:79.17250380826646,&#92;&quot;y_terminal_id&#92;&quot;:52.88949197529045},{&#92;&quot;TERMINAL_ID&#92;&quot;:6,&#92;&quot;x_terminal_id&#92;&quot;:56.80445610939323,&#92;&quot;y_terminal_id&#92;&quot;:92.5596638292661},{&#92;&quot;TERMINAL_ID&#92;&quot;:7,&#92;&quot;x_terminal_id&#92;&quot;:7.103605819788694,&#92;&quot;y_terminal_id&#92;&quot;:8.712929970154072},{&#92;&quot;TERMINAL_ID&#92;&quot;:8,&#92;&quot;x_terminal_id&#92;&quot;:2.021839744032572,&#92;&quot;y_terminal_id&#92;&quot;:83.2619845547938},{&#92;&quot;TERMINAL_ID&#92;&quot;:9,&#92;&quot;x_terminal_id&#92;&quot;:77.81567509498505,&#92;&quot;y_terminal_id&#92;&quot;:87.00121482468191}]&quot;' data-total-rows='100' data-total-columns='3' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;TERMINAL_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;x_terminal_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;y_terminal_id&quot;,[&quot;number&quot;,&quot;float64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "6663193e9fc7b66c1078072265cd5959",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"association-of-customer-profiles-to-terminals\">Association of customer profiles to terminals</h2>\n<span class=\"paragraph\">Let us now associate terminals with the customer profiles. In our design, customers can only perform transactions on terminals that are within a radius of <code>r</code> of their geographical locations.</span>\n<span class=\"paragraph\">Let us first write a function, called <code>get_list_terminals_within_radius</code>, which finds these terminals for a customer profile. The function will take as input a customer profile (any row in the customer profiles table), an array that contains the geographical location of all terminals, and the radius <code>r</code>. It will return the list of terminals within a radius of <code>r</code> for that customer.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "ddcf71f0cc859734a56eb028a8c6bd89",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "1b121eb50cdf784c96d9b89a2996cdce",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">As an example, let us get the list of terminals that are within a radius <marimo-tex class=\"arithmatex\">||(r=50||)</marimo-tex> of the last customer:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "a136335a288a37376f0c5c722cb601e6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "application/json": "[\"text/plain:2\", \"text/plain:3\", \"text/plain:8\", \"text/plain:11\", \"text/plain:12\", \"text/plain:13\", \"text/plain:15\", \"text/plain:17\", \"text/plain:32\", \"text/plain:41\", \"text/plain:45\", \"text/plain:46\", \"text/plain:52\", \"text/plain:54\", \"text/plain:55\", \"text/plain:62\", \"text/plain:71\", \"text/plain:73\", \"text/plain:75\", \"text/plain:76\", \"text/plain:77\", \"text/plain:83\", \"text/plain:88\", \"text/plain:90\", \"text/plain:96\", \"text/plain:99\"]"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "e962774866de0a4ed7a07a3f64abec31",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">The list contains the third and fourth terminals, which are indeed the only ones within a radius of <marimo-tex class=\"arithmatex\">||(50||)</marimo-tex> of the last customer.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "5a1dad0abc69af7364f0995f9e9144db",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='TqIu-0' random-id='1abf3c96-32e6-8091-22a2-75b0675d9bd8'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;TERMINAL_ID&#92;&quot;:0,&#92;&quot;x_terminal_id&#92;&quot;:54.88135039273247,&#92;&quot;y_terminal_id&#92;&quot;:71.51893663724195},{&#92;&quot;TERMINAL_ID&#92;&quot;:1,&#92;&quot;x_terminal_id&#92;&quot;:60.276337607164386,&#92;&quot;y_terminal_id&#92;&quot;:54.48831829968969},{&#92;&quot;TERMINAL_ID&#92;&quot;:2,&#92;&quot;x_terminal_id&#92;&quot;:42.36547993389047,&#92;&quot;y_terminal_id&#92;&quot;:64.58941130666561},{&#92;&quot;TERMINAL_ID&#92;&quot;:3,&#92;&quot;x_terminal_id&#92;&quot;:43.75872112626925,&#92;&quot;y_terminal_id&#92;&quot;:89.17730007820798},{&#92;&quot;TERMINAL_ID&#92;&quot;:4,&#92;&quot;x_terminal_id&#92;&quot;:96.36627605010293,&#92;&quot;y_terminal_id&#92;&quot;:38.34415188257777},{&#92;&quot;TERMINAL_ID&#92;&quot;:5,&#92;&quot;x_terminal_id&#92;&quot;:79.17250380826646,&#92;&quot;y_terminal_id&#92;&quot;:52.88949197529045},{&#92;&quot;TERMINAL_ID&#92;&quot;:6,&#92;&quot;x_terminal_id&#92;&quot;:56.80445610939323,&#92;&quot;y_terminal_id&#92;&quot;:92.5596638292661},{&#92;&quot;TERMINAL_ID&#92;&quot;:7,&#92;&quot;x_terminal_id&#92;&quot;:7.103605819788694,&#92;&quot;y_terminal_id&#92;&quot;:8.712929970154072},{&#92;&quot;TERMINAL_ID&#92;&quot;:8,&#92;&quot;x_terminal_id&#92;&quot;:2.021839744032572,&#92;&quot;y_terminal_id&#92;&quot;:83.2619845547938},{&#92;&quot;TERMINAL_ID&#92;&quot;:9,&#92;&quot;x_terminal_id&#92;&quot;:77.81567509498505,&#92;&quot;y_terminal_id&#92;&quot;:87.00121482468191}]&quot;' data-total-rows='100' data-total-columns='3' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;TERMINAL_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;x_terminal_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;y_terminal_id&quot;,[&quot;number&quot;,&quot;float64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "3302f04b0125679706d26c14870bb749",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">For better visualization, let us plot</span>\n<ul>\n<li>The locations of all terminals (in red)</li>\n<li>The location of the last customer (in blue)</li>\n<li>The region within radius of 50 of the first customer (in green)</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "1e2e0fdad3f2aba1d1831a9f97025735",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (ModuleNotFoundError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "ccebac168d76e1ad91bbbeccd29158a1",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Computing the list of available terminals for each customer is then straightforward, using the panda <code>apply</code> function. We store the results as a new column <code>available_terminals</code> in the customer profiles table.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "471e432c0f9d514db4e49e6ebdf5315c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='ecfG-0' random-id='d93d4160-bc13-2bfe-44d6-27a6aaf2ac41'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;x_customer_id&#92;&quot;:54.88135039273247,&#92;&quot;y_customer_id&#92;&quot;:71.51893663724195,&#92;&quot;mean_amount&#92;&quot;:62.262520726806166,&#92;&quot;std_amount&#92;&quot;:31.131260363403083,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.1795327319875875,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,5,6,9,10,11,12,13,14,15,16,18,19,20,22,24,25,28,29,32,35,36,40,41,42,44,45,46,50,51,52,53,54,55,56,57,58,59,60,61,62,64,65,67,68,69,70,71,72,73,74,75,76,77,78,80,81,82,88,90,91,92,93,94,96,97]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:1,&#92;&quot;x_customer_id&#92;&quot;:42.36547993389047,&#92;&quot;y_customer_id&#92;&quot;:64.58941130666561,&#92;&quot;mean_amount&#92;&quot;:46.57078506995579,&#92;&quot;std_amount&#92;&quot;:23.285392534977895,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.567092003128319,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,5,6,8,9,11,12,13,14,15,16,17,18,20,22,24,25,28,29,32,40,41,42,44,45,46,47,50,51,52,53,54,55,56,57,58,59,60,62,64,65,66,67,68,69,71,72,73,74,75,76,77,78,80,81,88,90,91,93,94,95,96,97,98,99]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:2,&#92;&quot;x_customer_id&#92;&quot;:96.36627605010293,&#92;&quot;y_customer_id&#92;&quot;:38.34415188257777,&#92;&quot;mean_amount&#92;&quot;:80.21387861785314,&#92;&quot;std_amount&#92;&quot;:40.10693930892657,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.115579679011618,&#92;&quot;available_terminals&#92;&quot;:[1,4,5,10,14,18,19,21,22,25,26,28,31,33,34,35,36,37,42,49,50,53,56,57,58,59,60,61,64,65,67,68,69,70,72,78,80,82,84,87,89,91,92,93,94,97]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:3,&#92;&quot;x_customer_id&#92;&quot;:56.80445610939323,&#92;&quot;y_customer_id&#92;&quot;:92.5596638292661,&#92;&quot;mean_amount&#92;&quot;:11.74842552879926,&#92;&quot;std_amount&#92;&quot;:5.87421276439963,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:0.34851719880616283,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,5,6,9,10,11,13,15,16,18,19,22,25,44,45,46,51,52,53,54,55,58,59,60,61,62,65,67,68,71,72,73,74,75,77,78,80,81,82,88,92,93,96,97]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:4,&#92;&quot;x_customer_id&#92;&quot;:2.021839744032572,&#92;&quot;y_customer_id&#92;&quot;:83.2619845547938,&#92;&quot;mean_amount&#92;&quot;:78.9248913402358,&#92;&quot;std_amount&#92;&quot;:39.4624456701179,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.4800485929872766,&#92;&quot;available_terminals&#92;&quot;:[2,3,8,11,12,13,15,17,32,41,45,46,52,54,55,62,71,73,75,76,77,83,88,90,96,99]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:5,&#92;&quot;x_customer_id&#92;&quot;:97.8618342232764,&#92;&quot;y_customer_id&#92;&quot;:79.91585642167236,&#92;&quot;mean_amount&#92;&quot;:48.84053941402853,&#92;&quot;std_amount&#92;&quot;:24.420269707014263,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.122116705145822,&#92;&quot;available_terminals&#92;&quot;:[0,1,4,5,6,9,10,18,19,22,35,36,44,51,53,57,58,59,60,61,67,68,69,70,72,74,78,80,81,82,92,93,97]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:6,&#92;&quot;x_customer_id&#92;&quot;:11.827442586893323,&#92;&quot;y_customer_id&#92;&quot;:63.99210213275238,&#92;&quot;mean_amount&#92;&quot;:18.618562303859406,&#92;&quot;std_amount&#92;&quot;:9.309281151929703,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.7786756681983356,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,8,11,12,13,14,15,16,17,18,20,24,25,27,32,40,41,45,46,47,52,53,54,55,62,63,66,67,68,71,73,75,76,77,83,88,90,93,96,98,99]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:7,&#92;&quot;x_customer_id&#92;&quot;:52.184832175007166,&#92;&quot;y_customer_id&#92;&quot;:41.46619399905236,&#92;&quot;mean_amount&#92;&quot;:30.132783149939563,&#92;&quot;std_amount&#92;&quot;:15.066391574969781,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:3.0969347577368667,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,4,5,11,12,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,35,36,37,38,39,40,42,43,45,46,47,48,50,52,53,55,56,57,58,59,60,61,62,64,65,66,67,68,69,70,71,72,76,78,79,80,81,84,85,87,89,90,91,92,93,94,95,97,98,99]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:8,&#92;&quot;x_customer_id&#92;&quot;:45.615033221654855,&#92;&quot;y_customer_id&#92;&quot;:56.84339488686485,&#92;&quot;mean_amount&#92;&quot;:6.785031041453738,&#92;&quot;std_amount&#92;&quot;:3.392515520726869,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.4705419883035082,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,5,6,9,11,12,13,14,15,16,17,18,20,22,24,25,27,28,29,31,32,38,39,40,41,42,43,44,45,46,47,50,51,52,53,54,55,56,57,58,59,60,62,64,65,66,67,68,69,70,71,72,73,75,76,77,78,80,81,83,84,87,88,90,91,92,93,94,95,96,97,98,99]},{&#92;&quot;CUSTOMER_ID&#92;&quot;:9,&#92;&quot;x_customer_id&#92;&quot;:61.20957227224214,&#92;&quot;y_customer_id&#92;&quot;:61.69339968747569,&#92;&quot;mean_amount&#92;&quot;:94.6560674588893,&#92;&quot;std_amount&#92;&quot;:47.32803372944465,&#92;&quot;mean_nb_tx_per_day&#92;&quot;:2.7272811964139336,&#92;&quot;available_terminals&#92;&quot;:[0,1,2,3,4,5,6,9,10,11,12,14,15,16,18,19,20,22,24,25,28,29,31,32,35,36,40,42,44,45,46,50,51,52,53,55,56,57,58,59,60,61,62,64,65,67,68,69,70,71,72,74,76,78,80,81,82,84,87,88,90,91,92,93,94,95,97]}]&quot;' data-total-rows='10000' data-total-columns='7' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;CUSTOMER_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;x_customer_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;y_customer_id&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;mean_amount&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;std_amount&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;mean_nb_tx_per_day&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;available_terminals&quot;,[&quot;string&quot;,&quot;object&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "6f6ca1095bfa941787e0ced37b509bd4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">It is worth noting that the radius <marimo-tex class=\"arithmatex\">||(r||)</marimo-tex> controls the number of terminals that will be on average available for each customer. As the number of terminals is increased, this radius should be adapted to match the average number of available terminals per customer that is desired in a simulation.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "86871d5017568dd267ee34593c4b761b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"generation-of-transactions\">Generation of transactions</h2>\n<span class=\"paragraph\">The customer profiles now contain all the information that we require to generate transactions. The transaction generation will be done by a function <code>generate_transactions_table</code> that takes as input a customer profile, a starting date, and a number of days for which to generate transactions. It will return a table of transactions, which follows the format presented above (without the transaction label, which will be added in <a href=\"Fraud_Scenarios_Generation\">fraud scenarios generation</a>).</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "eb0f8f37375eb75c1953de45557393da",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "13d379b127b3ea1b53d6e762c133ed9b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let us for example generate transactions for the first customer, for five days, starting at the date 2018-04-01:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "66fa5de1b154a740156af42e7a5d53c9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='xXTn-0' random-id='26de57a6-4637-a496-e45c-56f83ef7e1f2'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-01 07:19:05&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:70,&#92;&quot;TX_AMOUNT&#92;&quot;:123.59,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:26345,&#92;&quot;TX_TIME_DAYS&#92;&quot;:0},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-01 19:02:02&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:74,&#92;&quot;TX_AMOUNT&#92;&quot;:46.51,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:68522,&#92;&quot;TX_TIME_DAYS&#92;&quot;:0},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-01 18:00:16&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:6,&#92;&quot;TX_AMOUNT&#92;&quot;:77.34,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:64816,&#92;&quot;TX_TIME_DAYS&#92;&quot;:0},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-02 15:13:02&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:52,&#92;&quot;TX_AMOUNT&#92;&quot;:32.35,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:141182,&#92;&quot;TX_TIME_DAYS&#92;&quot;:1},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-02 14:05:38&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:93,&#92;&quot;TX_AMOUNT&#92;&quot;:63.3,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:137138,&#92;&quot;TX_TIME_DAYS&#92;&quot;:1},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-02 15:46:51&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:90,&#92;&quot;TX_AMOUNT&#92;&quot;:13.59,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:143211,&#92;&quot;TX_TIME_DAYS&#92;&quot;:1},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-02 08:51:06&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:72,&#92;&quot;TX_AMOUNT&#92;&quot;:54.72,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:118266,&#92;&quot;TX_TIME_DAYS&#92;&quot;:1},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-02 20:24:47&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:57,&#92;&quot;TX_AMOUNT&#92;&quot;:51.89,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:159887,&#92;&quot;TX_TIME_DAYS&#92;&quot;:1},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-03 12:15:47&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:88,&#92;&quot;TX_AMOUNT&#92;&quot;:117.91,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:216947,&#92;&quot;TX_TIME_DAYS&#92;&quot;:2},{&#92;&quot;TX_DATETIME&#92;&quot;:&#92;&quot;2018-04-03 08:50:09&#92;&quot;,&#92;&quot;CUSTOMER_ID&#92;&quot;:0,&#92;&quot;TERMINAL_ID&#92;&quot;:65,&#92;&quot;TX_AMOUNT&#92;&quot;:67.72,&#92;&quot;TX_TIME_SECONDS&#92;&quot;:204609,&#92;&quot;TX_TIME_DAYS&#92;&quot;:2}]&quot;' data-total-rows='17' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;TX_DATETIME&quot;,[&quot;datetime&quot;,&quot;datetime64[s]&quot;]],[&quot;CUSTOMER_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;TERMINAL_ID&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;TX_AMOUNT&quot;,[&quot;number&quot;,&quot;float64&quot;]],[&quot;TX_TIME_SECONDS&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;TX_TIME_DAYS&quot;,[&quot;integer&quot;,&quot;int64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "5c2d6a6d3f3fbc50b7919b5c733d4219",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">We can make a quick check that the generated transactions follow the customer profile properties:</span>\n<ul>\n<li>The terminal IDs are indeed those in the list of available terminals (0, 1, 2 and 3)</li>\n<li>The transaction amounts seem to follow the amount parameters of the customer (<code>mean_amount</code>=62.26 and <code>std_amount</code>=31.13)</li>\n<li>The number of transactions per day varies according to the transaction frequency parameters of the customer (<code>mean_nb_tx_per_day</code>=2.18).</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "2b5765c53ff3b77e1683492f41c60b11",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let us now generate the transactions for all customers. This is straightforward using the pandas <code>groupby</code> and <code>apply</code> methods:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "de99ba1798fcb41dbc92df60cff37cdf",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "'Series' object has no attribute 'CUSTOMER_ID'",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_NCOB_.py\"</span>, line <span class=\"m\">1</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">transactions_df</span><span class=\"o\">=</span><span class=\"n\">customer_profiles_table</span><span class=\"o\">.</span><span class=\"n\">groupby</span><span class=\"p\">(</span><span class=\"s1\">'CUSTOMER_ID'</span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">apply</span><span class=\"p\">(</span><span class=\"k\">lambda</span> <span class=\"n\">x</span> <span class=\"p\">:</span> <span class=\"n\">generate_transactions_table</span><span class=\"p\">(</span><span class=\"n\">x</span><span class=\"o\">.</span><span class=\"n\">iloc</span><span class=\"p\">[</span><span class=\"mi\">0</span><span class=\"p\">],</span> <span class=\"n\">nb_days</span><span class=\"o\">=</span><span class=\"mi\">5</span><span class=\"p\">))</span><span class=\"o\">.</span><span class=\"n\">reset_index</span><span class=\"p\">(</span><span class=\"n\">drop</span><span class=\"o\">=</span><span class=\"kc\">True</span><span class=\"p\">)</span>\n<span class=\"w\">                    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\groupby.py\"</span>, line <span class=\"m\">1650</span>, in <span class=\"n\">apply</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_python_apply_general</span><span class=\"p\">(</span><span class=\"n\">f</span><span class=\"p\">,</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_obj_with_exclusions</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\groupby.py\"</span>, line <span class=\"m\">1687</span>, in <span class=\"n\">_python_apply_general</span>\n<span class=\"w\">    </span><span class=\"n\">values</span><span class=\"p\">,</span> <span class=\"n\">mutated</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_grouper</span><span class=\"o\">.</span><span class=\"n\">apply_groupwise</span><span class=\"p\">(</span><span class=\"n\">f</span><span class=\"p\">,</span> <span class=\"n\">data</span><span class=\"p\">)</span>\n<span class=\"w\">                      </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\ops.py\"</span>, line <span class=\"m\">1035</span>, in <span class=\"n\">apply_groupwise</span>\n<span class=\"w\">    </span><span class=\"n\">res</span> <span class=\"o\">=</span> <span class=\"n\">f</span><span class=\"p\">(</span><span class=\"n\">group</span><span class=\"p\">)</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_NCOB_.py\"</span>, line <span class=\"m\">1</span>, in <span class=\"n\">&lt;lambda&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">transactions_df</span><span class=\"o\">=</span><span class=\"n\">customer_profiles_table</span><span class=\"o\">.</span><span class=\"n\">groupby</span><span class=\"p\">(</span><span class=\"s1\">'CUSTOMER_ID'</span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">apply</span><span class=\"p\">(</span><span class=\"k\">lambda</span> <span class=\"n\">x</span> <span class=\"p\">:</span> <span class=\"n\">generate_transactions_table</span><span class=\"p\">(</span><span class=\"n\">x</span><span class=\"o\">.</span><span class=\"n\">iloc</span><span class=\"p\">[</span><span class=\"mi\">0</span><span class=\"p\">],</span> <span class=\"n\">nb_days</span><span class=\"o\">=</span><span class=\"mi\">5</span><span class=\"p\">))</span><span class=\"o\">.</span><span class=\"n\">reset_index</span><span class=\"p\">(</span><span class=\"n\">drop</span><span class=\"o\">=</span><span class=\"kc\">True</span><span class=\"p\">)</span>\n<span class=\"w\">                                                                                    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_aLJB_.py\"</span>, line <span class=\"m\">5</span>, in <span class=\"n\">generate_transactions_table</span>\n<span class=\"w\">    </span><span class=\"n\">random</span><span class=\"o\">.</span><span class=\"n\">seed</span><span class=\"p\">(</span><span class=\"nb\">int</span><span class=\"p\">(</span><span class=\"n\">customer_profile</span><span class=\"o\">.</span><span class=\"n\">CUSTOMER_ID</span><span class=\"p\">))</span>\n<span class=\"w\">                    </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\generic.py\"</span>, line <span class=\"m\">6194</span>, in <span class=\"n\">__getattr__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"nb\">object</span><span class=\"o\">.</span><span class=\"fm\">__getattribute__</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"p\">,</span> <span class=\"n\">name</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^</span>\n<span class=\"gr\">AttributeError</span>: <span class=\"n\">'Series' object has no attribute 'CUSTOMER_ID'</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "7da47ed57f65219ce8071f6be0d54cf8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">This gives us a set of 65 transactions, with 5 customers, 5 terminals, and 5 days.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "29094dfa47c9c3bc67fded154a61f04a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3> Scaling up to a larger dataset</h3>\n\n<span class=\"paragraph\">We now have all the building blocks to generate a larger dataset. Let us write a <code>generate_dataset</code> function, that will take care of running all the previous steps. It will</span>\n<ul>\n<li>take as inputs the number of desired customers, terminals and days, as well as the starting date and the radius <code>r</code></li>\n<li>return the generated customer and terminal profiles table, and the DataFrame of transactions.</li>\n</ul>\n<div class=\"language-mysql codehilite\"><pre><span></span><code><span class=\"k\">In</span><span class=\"w\"> </span><span class=\"k\">order</span><span class=\"w\"> </span><span class=\"k\">to</span><span class=\"w\"> </span><span class=\"n\">speed</span><span class=\"w\"> </span><span class=\"n\">up</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n\">computations</span><span class=\"p\">,</span><span class=\"w\"> </span><span class=\"k\">one</span><span class=\"w\"> </span><span class=\"n\">can</span><span class=\"w\"> </span><span class=\"k\">use</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n n-Quoted\">`parallel_apply`</span><span class=\"w\"> </span><span class=\"k\">function</span><span class=\"w\"> </span><span class=\"k\">of</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n n-Quoted\">`pandarallel`</span><span class=\"w\"> </span><span class=\"n\">module</span><span class=\"p\">.</span><span class=\"w\"> </span><span class=\"n\">This</span><span class=\"w\"> </span><span class=\"k\">function</span><span class=\"w\"> </span><span class=\"n\">replaces</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n\">panda</span><span class=\"w\"> </span><span class=\"n n-Quoted\">`apply`</span><span class=\"w\"> </span><span class=\"k\">function</span><span class=\"p\">,</span><span class=\"w\"> </span><span class=\"k\">and</span><span class=\"w\"> </span><span class=\"n\">allows</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n\">distribution</span><span class=\"w\"> </span><span class=\"k\">of</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n\">computation</span><span class=\"w\"> </span><span class=\"k\">on</span><span class=\"w\"> </span><span class=\"k\">all</span><span class=\"w\"> </span><span class=\"n\">the</span><span class=\"w\"> </span><span class=\"n\">available</span><span class=\"w\"> </span><span class=\"n\">CPUs</span><span class=\"p\">.</span>\n</code></pre></div></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "4bcc0d3c14503f0609d5c736e857bebd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "f23f5f2c46d6a448b06060d6d5b925b5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let us generate a dataset that features</span>\n<ul>\n<li>5000 customers</li>\n<li>10000 terminals</li>\n<li>183 days of transactions (which corresponds to a simulated period from 2018/04/01 to 2018/09/30)</li>\n</ul>\n<span class=\"paragraph\">The starting date is arbitrarily fixed at 2018/04/01. The radius <marimo-tex class=\"arithmatex\">||(r||)</marimo-tex> is set to 5, which corresponds to around 100 available terminals for each customer.</span>\n<span class=\"paragraph\">It takes around 3 minutes to generate this dataset on a standard laptop.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "0318a217001b03be65491aa686faf6fa",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "'Series' object has no attribute 'CUSTOMER_ID'",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Time to generate customer profiles table: 0.12s\nTime to generate terminal profiles table: 0.11s\nTime to associate terminals to customers: 3.0s\n",
+          "mimetype": "text/plain"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_yCnT_.py\"</span>, line <span class=\"m\">1</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">customer_profiles_table_1</span><span class=\"p\">,</span> <span class=\"n\">terminal_profiles_table_1</span><span class=\"p\">,</span> <span class=\"n\">transactions_df_raw</span> <span class=\"o\">=</span> <span class=\"n\">generate_dataset</span><span class=\"p\">(</span><span class=\"n\">n_customers</span><span class=\"o\">=</span><span class=\"mi\">5000</span><span class=\"p\">,</span> <span class=\"n\">n_terminals</span><span class=\"o\">=</span><span class=\"mi\">10000</span><span class=\"p\">,</span> <span class=\"n\">nb_days</span><span class=\"o\">=</span><span class=\"mi\">183</span><span class=\"p\">,</span> <span class=\"n\">start_date</span><span class=\"o\">=</span><span class=\"s1\">'2018-04-01'</span><span class=\"p\">,</span> <span class=\"n\">r</span><span class=\"o\">=</span><span class=\"mi\">5</span><span class=\"p\">)</span>\n<span class=\"w\">                                                                                </span><span class=\"pm\">~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_TXez_.py\"</span>, line <span class=\"m\">20</span>, in <span class=\"n\">generate_dataset</span>\n<span class=\"w\">    </span><span class=\"n\">transactions_df</span><span class=\"o\">=</span><span class=\"n\">customer_profiles_table</span><span class=\"o\">.</span><span class=\"n\">groupby</span><span class=\"p\">(</span><span class=\"s1\">'CUSTOMER_ID'</span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">apply</span><span class=\"p\">(</span><span class=\"k\">lambda</span> <span class=\"n\">x</span> <span class=\"p\">:</span> <span class=\"n\">generate_transactions_table</span><span class=\"p\">(</span><span class=\"n\">x</span><span class=\"o\">.</span><span class=\"n\">iloc</span><span class=\"p\">[</span><span class=\"mi\">0</span><span class=\"p\">],</span> <span class=\"n\">nb_days</span><span class=\"o\">=</span><span class=\"n\">nb_days</span><span class=\"p\">))</span><span class=\"o\">.</span><span class=\"n\">reset_index</span><span class=\"p\">(</span><span class=\"n\">drop</span><span class=\"o\">=</span><span class=\"kc\">True</span><span class=\"p\">)</span>\n<span class=\"w\">                    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\groupby.py\"</span>, line <span class=\"m\">1650</span>, in <span class=\"n\">apply</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_python_apply_general</span><span class=\"p\">(</span><span class=\"n\">f</span><span class=\"p\">,</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_obj_with_exclusions</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\groupby.py\"</span>, line <span class=\"m\">1687</span>, in <span class=\"n\">_python_apply_general</span>\n<span class=\"w\">    </span><span class=\"n\">values</span><span class=\"p\">,</span> <span class=\"n\">mutated</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_grouper</span><span class=\"o\">.</span><span class=\"n\">apply_groupwise</span><span class=\"p\">(</span><span class=\"n\">f</span><span class=\"p\">,</span> <span class=\"n\">data</span><span class=\"p\">)</span>\n<span class=\"w\">                      </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\groupby\\ops.py\"</span>, line <span class=\"m\">1035</span>, in <span class=\"n\">apply_groupwise</span>\n<span class=\"w\">    </span><span class=\"n\">res</span> <span class=\"o\">=</span> <span class=\"n\">f</span><span class=\"p\">(</span><span class=\"n\">group</span><span class=\"p\">)</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_TXez_.py\"</span>, line <span class=\"m\">20</span>, in <span class=\"n\">&lt;lambda&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">transactions_df</span><span class=\"o\">=</span><span class=\"n\">customer_profiles_table</span><span class=\"o\">.</span><span class=\"n\">groupby</span><span class=\"p\">(</span><span class=\"s1\">'CUSTOMER_ID'</span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">apply</span><span class=\"p\">(</span><span class=\"k\">lambda</span> <span class=\"n\">x</span> <span class=\"p\">:</span> <span class=\"n\">generate_transactions_table</span><span class=\"p\">(</span><span class=\"n\">x</span><span class=\"o\">.</span><span class=\"n\">iloc</span><span class=\"p\">[</span><span class=\"mi\">0</span><span class=\"p\">],</span> <span class=\"n\">nb_days</span><span class=\"o\">=</span><span class=\"n\">nb_days</span><span class=\"p\">))</span><span class=\"o\">.</span><span class=\"n\">reset_index</span><span class=\"p\">(</span><span class=\"n\">drop</span><span class=\"o\">=</span><span class=\"kc\">True</span><span class=\"p\">)</span>\n<span class=\"w\">                                                                                    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_aLJB_.py\"</span>, line <span class=\"m\">5</span>, in <span class=\"n\">generate_transactions_table</span>\n<span class=\"w\">    </span><span class=\"n\">random</span><span class=\"o\">.</span><span class=\"n\">seed</span><span class=\"p\">(</span><span class=\"nb\">int</span><span class=\"p\">(</span><span class=\"n\">customer_profile</span><span class=\"o\">.</span><span class=\"n\">CUSTOMER_ID</span><span class=\"p\">))</span>\n<span class=\"w\">                    </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"E:\\Workspace\\Projects\\dev-test\\.pixi\\envs\\default\\Lib\\site-packages\\pandas\\core\\generic.py\"</span>, line <span class=\"m\">6194</span>, in <span class=\"n\">__getattr__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"nb\">object</span><span class=\"o\">.</span><span class=\"fm\">__getattribute__</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"p\">,</span> <span class=\"n\">name</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^</span>\n<span class=\"gr\">AttributeError</span>: <span class=\"n\">'Series' object has no attribute 'CUSTOMER_ID'</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "wlCL",
+      "code_hash": "fc73e31c69d094430538f9cef0b52a73",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">A total of 1754155 transactions were generated.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "kqZH",
+      "code_hash": "fd099d2942ae067ff62703d27f526870",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AttributeError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wAgl",
+      "code_hash": "843d0dad3b38f476b92efc3a50a6fa98",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Note that this number is low compared to real-world fraud detection systems, where millions of transactions may need to be processed every day. This will however be enough for the purpose of this book, in particular to keep reasonable executions times.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "rEll",
+      "code_hash": "c0853c950d1a25f65423ea1f16d004d8",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "Name `transactions_df_1` is not defined. It was expected to be defined in ",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">\"C:\\Users\\ramar\\AppData\\Local\\Temp\\marimo_31924\\__marimo__cell_rEll_.py\"</span>, line <span class=\"m\">1</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">transactions_df_1</span>\n<span class=\"gr\">NameError</span>: <span class=\"n\">name 'transactions_df_1' is not defined</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "dGlV",
+      "code_hash": "6589689db9e08e74579ef6c3d990e9d4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">As a sanity check, let us plot the distribution of transaction amounts and transaction times.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SdmI",
+      "code_hash": "1d8f0fbb231f69019c0a7a3c646e5a6e",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (ModuleNotFoundError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lgWD",
+      "code_hash": "bb9821dfcb9275206d4f7d6edf6967be",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">The distribution of transaction amounts has most of its mass for small amounts. The distribution of transaction times  follows a gaussian distribution on a daily basis, centered around noon. These two distributions are in accordance with the simulation parameters used in the previous sections.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "yOPj",
+      "code_hash": "f625f3a9c39d608edd8fc44afde49d1e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">(Fraud_Scenarios_Generation)=</span>\n<h2 id=\"fraud-scenarios-generation\">Fraud scenarios generation</h2>\n<span class=\"paragraph\">This last step of the simulation adds fraudulent transactions to the dataset, using the following fraud scenarios:</span>\n<ul>\n<li>Scenario 1: Any transaction whose amount is more than 220 is a fraud. This scenario is not inspired by a real-world scenario. Rather, it will provide an obvious fraud pattern that should be detected by any baseline fraud detector. This will be useful to validate the implementation of a fraud detection technique.</li>\n<li>Scenario 2: Every day, a list of two terminals is drawn at random. All transactions on these terminals in the next 28 days will be marked as fraudulent. This scenario simulates a criminal use of a terminal, through phishing for example. Detecting this scenario will be possible by adding features that keep track of the number of fraudulent transactions on the terminal. Since the terminal is only compromised for 28 days, additional strategies that involve concept drift will need to be designed to efficiently deal with this scenario.</li>\n<li>Scenario 3: Every day, a list of 3 customers is drawn at random. In the next 14 days, 1/3 of their transactions have their amounts multiplied by 5 and marked as fraudulent. This scenario simulates a card-not-present fraud where the credentials of a customer have been leaked. The customer continues to make transactions, and transactions of higher values are made by the fraudster who tries to maximize their gains. Detecting this scenario will require adding features that keep track of the spending habits of the customer. As for scenario 2, since the card is only temporarily compromised, additional strategies that involve concept drift should also be designed.</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "fwwy",
+      "code_hash": "e30d6d92881da062e72be8bd85ddfb95",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "LJZf",
+      "code_hash": "0f2a027122181b060811d5bfbd568d84",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let us add fraudulent transactions using these scenarios:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "urSm",
+      "code_hash": "c5985fef0d894041a91b1fef26320190",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AttributeError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "jxvo",
+      "code_hash": "b87bac42c5f927954d1f85fae5e69da6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Percentage of fraudulent transactions:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "mWxS",
+      "code_hash": "1f6ebd9b22f392199dff689f66a61d27",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "CcZR",
+      "code_hash": "f2ceb66100192cb01b259b5a349c10b4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Number of fraudulent transactions:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "YWSi",
+      "code_hash": "1bac8b2756f52cc6f887ca2771d4bb09",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "zlud",
+      "code_hash": "62a0055e3dcc78cfc4c2b6ab5e5aa356",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">A total of 14681 transactions were marked as fraudulent. This amounts to 0.8% of the transactions. Note that the sum of the frauds for each scenario does not equal the total amount of fraudulent transactions. This is because the same transactions may have been marked as fraudulent by two or more fraud scenarios.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "tZnO",
+      "code_hash": "d7e6062c4c4c17db99b790d91cfda9f2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Our simulated transaction dataset is now complete, with a fraudulent label added to all transactions.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "xvXZ",
+      "code_hash": "2a4a6a4320e729455d88682fd257ad32",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "CLip",
+      "code_hash": "9093a12469b6ab47f33c1427acf26567",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "YECM",
+      "code_hash": "3254246b5941d04590c7c96d4aefe623",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "cEAS",
+      "code_hash": "c3b6ee452f36c2b853d64cbfdd57de3e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "iXej",
+      "code_hash": "16da325909e538e53a8535bb27286a09",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let us check how the number of transactions, the number of fraudulent transactions, and the number of compromised cards vary on a daily basis.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "EJmg",
+      "code_hash": "541e3019ebed80996f32922bad102fcb",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "UmEG",
+      "code_hash": "303490c0852b6c99f178066c5e51b1cb",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "vEBW",
+      "code_hash": "7af47bcf1dd175eb64f8ddf7c4e59580",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">This simulation generated around 10000 transactions per day. The number of fraudulent transactions per day is around 85, and the number of fraudulent cards around 80. It is worth noting that the first month has a lower number of fraudulent transactions, which is due to the fact that frauds from scenarios 2 and 3 span periods of 28 and 14 days, respectively.</span>\n<span class=\"paragraph\">The resulting dataset is interesting: It features class imbalance (less than 1% of fraudulent transactions), a mix of numerical and categorical features, non-trivial relationships between features, and time-dependent fraud scenarios.</span>\n<span class=\"paragraph\">Let us finally save the dataset for reuse in the rest of this book.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "kLmu",
+      "code_hash": "4d7647783f9805ac740936f7b8a7160b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"saving-of-dataset\">Saving of dataset</h2>\n<span class=\"paragraph\">Instead of saving the whole transaction dataset, we split the dataset into daily batches. This will allow later the loading of specific periods instead of the whole dataset. The pickle format is used, rather than CSV, to speed up the loading times. All files are saved in the <code>DIR_OUTPUT</code> folder. The names of the files are the dates, with the <code>.pkl</code> extension.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "IpqN",
+      "code_hash": "e17eb95725093bdc173f82f9209b8e6c",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "dxZZ",
+      "code_hash": "9a73805c79bf0fc47b7ec1f4e6227df0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">The generated dataset is also available from Github at <code>https://github.com/Fraud-Detection-Handbook/simulated-data-raw</code>.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

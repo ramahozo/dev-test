@@ -1,0 +1,28 @@
+[workspace]
+authors = ["ramahozo <46893622+ramahozo@users.noreply.github.com>"]
+channels = ["conda-forge"]
+name = "dev-agentic"
+platforms = [
+    { platform = "win-64", cuda = "13.4" },
+    { platform = "linux-64" }
+]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.13,<3.14"
+marimo = ">=0.25.1,<0.26"
+numpy = ">=2.5.4,<3"
+pandas = ">=3.0.6,<4"
+yfinance = ">=1.7.0,<2"
+httpx = ">=0.28.1,<0.29"
+pytest = ">=9.1.1,<10"
+scipy = ">=1.18.1,<2"
+jinja2 = ">=3.1.6,<4"
+
+[feature.js.dependencies]
+nodejs = ">=22,<23"
+
+[environments]
+js = { features = ["js"], solve-group = "js" }

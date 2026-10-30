@@ -1,0 +1,57 @@
+# pixi environments
+.pixi/
+!.pixi/config.toml
+
+# --- Plane B (node / pnpm / turbo) ---
+node_modules/
+dist/
+build/
+.turbo/
+.vite/
+coverage/
+playwright-report/
+test-results/
+storybook-static/
+
+# --- Plane A (python) ---
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# --- secrets: never commit, always reference (P1 / X2) ---
+.env
+.env.*
+!.env.example
+
+# --- local runtime data (sqlite dev DBs, never commit) ---
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+
+# --- Agents and testing purposes ---
+.DS_Store
+Thumbs.db
+
+# Old Repo ---
+src/dev-agentic-old/
+# Presentations
+src/presentations/
+
+# --- Kilo Code harness runtime state (local-only, never commit) ---
+.kilo/agent-manager.json
+.kilo/plans/
+.kilo/worktrees/
+.kilo/setup-script*
+.kilocode/agent-manager.json
+.kilocode/worktrees/
+.kilocode/setup-script*
